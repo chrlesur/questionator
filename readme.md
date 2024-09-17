@@ -66,7 +66,7 @@ brew install go
 
 1. Clonez ce dépôt :
    ```
-   git clone https://github.com/votre-nom/questionator.git
+   git clone https://github.com/chrlesur/questionator.git
    cd questionator
    ```
 
