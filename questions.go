@@ -84,6 +84,7 @@ func parseTextResponse(text string) ([]Question, error) {
 	currentQuestion := Question{}
 	currentField := ""
 	questionPattern := regexp.MustCompile(`^\d+\.\s`)
+	qrPattern := regexp.MustCompile(`Q:\s*(.*?)\s*R:\s*(.*)`)
 	passagePattern := regexp.MustCompile(`Passage\s*:\s*"(.+)"`)
 
 	for _, line := range lines {
@@ -93,8 +94,17 @@ func parseTextResponse(text string) ([]Question, error) {
 			if currentQuestion.Question != "" {
 				questions = append(questions, currentQuestion)
 			}
-			currentQuestion = Question{Question: strings.TrimSpace(questionPattern.ReplaceAllString(line, ""))}
+			currentQuestion = Question{}
 			currentField = "question"
+
+			// Vérifier si la question et la réponse sont sur la même ligne
+			if match := qrPattern.FindStringSubmatch(line); match != nil {
+				currentQuestion.Question = strings.TrimSpace(match[1])
+				currentQuestion.Answer = strings.TrimSpace(match[2])
+				currentField = "answer"
+			} else {
+				currentQuestion.Question = strings.TrimSpace(questionPattern.ReplaceAllString(line, ""))
+			}
 		} else if strings.HasPrefix(line, "Réponse:") || strings.HasPrefix(line, "Réponse :") {
 			currentQuestion.Answer = strings.TrimPrefix(strings.TrimPrefix(line, "Réponse:"), "Réponse :")
 			currentField = "answer"
