@@ -17,7 +17,7 @@ func generateQuestions(verbatim string, questionCount int) ([]Question, error) {
 		return nil, fmt.Errorf("la clé API ANTHROPIC_API_KEY n'est pas définie")
 	}
 
-	prompt := fmt.Sprintf("Générez %d questions pertinentes basées sur le verbatim suivant. Pour chaque question, fournissez la bonne réponse, une explication de pourquoi c'est la bonne réponse, et le passage associé du verbatim. Verbatim: %s", questionCount, verbatim)
+	prompt := fmt.Sprintf("Générez %d questions pertinentes basées sur l'ensemble du verbatim suivant. Pour chaque question, fournissez la bonne réponse, une explication de pourquoi c'est la bonne réponse, et le passage associé du verbatim. Verbatim: %s", questionCount, verbatim)
 
 	reqBody, err := json.Marshal(APIRequest{
 		Model:     ClaudeModelName,
@@ -85,7 +85,7 @@ func parseTextResponse(text string) ([]Question, error) {
 	currentField := ""
 	questionPattern := regexp.MustCompile(`^\d+\.\s`)
 	qrPattern := regexp.MustCompile(`Q:\s*(.*?)\s*R:\s*(.*)`)
-	passagePattern := regexp.MustCompile(`Passage\s*:\s*"(.+)"`)
+	passagePattern := regexp.MustCompile(`Passage(?:\s*associé)?\s*:\s*"?(.+?)"?$`)
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -97,7 +97,6 @@ func parseTextResponse(text string) ([]Question, error) {
 			currentQuestion = Question{}
 			currentField = "question"
 
-			// Vérifier si la question et la réponse sont sur la même ligne
 			if match := qrPattern.FindStringSubmatch(line); match != nil {
 				currentQuestion.Question = strings.TrimSpace(match[1])
 				currentQuestion.Answer = strings.TrimSpace(match[2])
@@ -105,6 +104,9 @@ func parseTextResponse(text string) ([]Question, error) {
 			} else {
 				currentQuestion.Question = strings.TrimSpace(questionPattern.ReplaceAllString(line, ""))
 			}
+		} else if strings.HasPrefix(line, "Question :") {
+			currentQuestion.Question = strings.TrimPrefix(line, "Question :")
+			currentField = "question"
 		} else if strings.HasPrefix(line, "Réponse:") || strings.HasPrefix(line, "Réponse :") {
 			currentQuestion.Answer = strings.TrimPrefix(strings.TrimPrefix(line, "Réponse:"), "Réponse :")
 			currentField = "answer"
@@ -123,6 +125,7 @@ func parseTextResponse(text string) ([]Question, error) {
 			case "reason":
 				if match := passagePattern.FindStringSubmatch(line); match != nil {
 					currentQuestion.Passage = match[1]
+					currentField = "passage"
 				} else {
 					currentQuestion.Reason += " " + line
 				}
@@ -135,6 +138,14 @@ func parseTextResponse(text string) ([]Question, error) {
 	// Ajouter la dernière question
 	if currentQuestion.Question != "" {
 		questions = append(questions, currentQuestion)
+	}
+
+	// Nettoyage final
+	for i := range questions {
+		questions[i].Question = strings.TrimSpace(questions[i].Question)
+		questions[i].Answer = strings.TrimSpace(questions[i].Answer)
+		questions[i].Reason = strings.TrimSpace(questions[i].Reason)
+		questions[i].Passage = strings.TrimSpace(questions[i].Passage)
 	}
 
 	if len(questions) == 0 {
